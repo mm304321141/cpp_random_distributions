@@ -30,7 +30,7 @@
 /*
  * The zipfian_int_distribution class is intended to be compatible with other
  * distributions introduced in #include <random> by the C++11 standard.
- * 
+ *
  * Usage example:
  * #include <random>
  * #include "zipfian_int_distribution.h"
@@ -47,7 +47,7 @@
  * value which becomes prohibetively expensive for very large ranges. As an
  * alternative for such cases, the user can pass the pre-calculated values and
  * avoid the calculation every time.
- * 
+ *
  * Usage example:
  * #include <random>
  * #include "zipfian_int_distribution.h"
@@ -80,14 +80,14 @@ public:
 
     explicit param_type(_IntType __a = 0, _IntType __b = std::numeric_limits<_IntType>::max(), double __theta = 0.99)
     : _M_a(__a), _M_b(__b), _M_theta(__theta),
-      _M_zeta(zeta(_M_b - _M_a + 1, __theta)), _M_zeta2theta(zeta(2, __theta))
+      _M_zeta(zeta(_M_b - _M_a, __theta)), _M_zeta2theta(zeta(2, __theta))
     {
       assert(_M_a <= _M_b && _M_theta > 0.0 && _M_theta < 1.0);
     }
-    
+
     explicit param_type(_IntType __a, _IntType __b, double __theta, double __zeta)
     : _M_a(__a), _M_b(__b), _M_theta(__theta), _M_zeta(__zeta),
-    _M_zeta2theta(zeta(2, __theta))
+    _M_zeta2theta(zeta(1, __theta))
     {
       __glibcxx_assert(_M_a <= _M_b && _M_theta > 0.0 && _M_theta < 1.0);
     }
@@ -124,11 +124,19 @@ public:
      * @param __n [IN]  The size of the domain.
      * @param __theta [IN]  The skew factor of the distribution.
      */
-    double zeta(unsigned long __n, double __theta)
+    double zeta(unsigned long __n_minus_1, double __theta)
     {
       double ans = 0.0;
-      for(unsigned long i=1; i<=__n; ++i)
+      unsigned long max = std::numeric_limits<unsigned long>::max() >> (64 - std::numeric_limits<double>::digits);
+      unsigned long end = std::min(__n_minus_1, max) + 1;
+      for(unsigned long i=1; i<=end; ++i)
         ans += std::pow(1.0/i, __theta);
+      if (end <= __n_minus_1) {
+        long double lf_i = static_cast<long double>(end) + 1, lf_theta = __theta, lf_ans = 0.0;
+        for (unsigned long i=end-1; i<__n_minus_1; lf_i+=1, ++i)
+          lf_ans += std::pow(1.0/lf_i, lf_theta);
+        ans += static_cast<double>(lf_ans);
+      }
       return ans;
     }
   };
@@ -194,9 +202,9 @@ public:
   {
     double alpha = 1 / (1 - __p.theta());
     double eta = (1 - std::pow(2.0 / (__p.b() - __p.a() + 1), 1 - __p.theta())) / (1 - __p.zeta2theta() / __p.zeta());
-      
+
     double u = std::generate_canonical<double, std::numeric_limits<double>::digits, _UniformRandomNumberGenerator>(__urng);
-      
+
     double uz = u * __p.zeta();
     if(uz < 1.0) return __p.a();
     if(uz < 1.0 + std::pow(0.5, __p.theta())) return __p.a() + 1;
